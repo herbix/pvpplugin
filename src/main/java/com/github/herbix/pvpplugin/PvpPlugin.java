@@ -223,6 +223,8 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 				}
 				player.setExp(0);
 				player.getInventory().clear();
+				player.setSaturation(5);
+				player.setFoodLevel(20);
 				state.reset();
 			}
 			
