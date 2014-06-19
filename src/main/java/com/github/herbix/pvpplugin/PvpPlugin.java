@@ -6,12 +6,14 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Biome;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -49,6 +51,7 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 		initScoreboard();
 		initRecipes();
 		getServer().getScheduler().scheduleSyncRepeatingTask(this, this, 0, 20);
+		getServer().getWorld("world").setGameRuleValue("keepInventory", "true");
 	}
 
 	private void initRecipes() {
@@ -82,16 +85,15 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 
 	private void initScoreboard() {
 		ScoreboardManager sm = getServer().getScoreboardManager();
-		Scoreboard mb = sm.getMainScoreboard();
 		sb = sm.getNewScoreboard();
 
-		Team red = mb.getTeam("pvp-red");
-		Team blue = mb.getTeam("pvp-blue");
+		Team red = sb.getTeam("pvp-red");
+		Team blue = sb.getTeam("pvp-blue");
 		if(red == null) {
-			red = mb.registerNewTeam("pvp-red");
+			red = sb.registerNewTeam("pvp-red");
 		}
 		if(blue == null) {
-			blue = mb.registerNewTeam("pvp-blue");
+			blue = sb.registerNewTeam("pvp-blue");
 		}
 
 		red.setAllowFriendlyFire(false);
@@ -122,13 +124,12 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 	public void onDisable() {
 		HandlerList.unregisterAll((JavaPlugin) this);
 
-		Scoreboard mb = getServer().getScoreboardManager().getMainScoreboard();
-
-		mb.getTeam("pvp-red").unregister();
-		mb.getTeam("pvp-blue").unregister();
+		sb.getTeam("pvp-red").unregister();
+		sb.getTeam("pvp-blue").unregister();
 		sb.getObjective("States").unregister();
 
 		Player[] players = getServer().getOnlinePlayers();
+		Scoreboard mb = getServer().getScoreboardManager().getMainScoreboard();
 		for(Player player : players) {
 			player.setScoreboard(mb);
 			player.setCompassTarget(player.getWorld().getSpawnLocation());
@@ -155,20 +156,12 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 				
 				boolean isRed = cmd.getName().equalsIgnoreCase("red");
 				Player player = (Player) sender;
-				Scoreboard mb = getServer().getScoreboardManager().getMainScoreboard();
 				
-				mb.getTeam("pvp-" + cmd.getName().toLowerCase()).addPlayer(player);
+				sb.getTeam("pvp-" + cmd.getName().toLowerCase()).addPlayer(player);
 				
 				playerStates.get(player.getUniqueId()).team = isRed ? 1 : 2;
 
-				for(Entry<UUID, State> entry : playerStates.entrySet()) {
-					UUID playerId = entry.getKey();
-					Player player2 = getServer().getPlayer(playerId);
-					
-					if(player2 != null) {
-						player2.sendMessage("¡ìe" + player.getName() + "¡ìr is changed to team " + (isRed ? "¡ìcred" : "¡ì9blue") + ".");
-					}
-				}
+				sendToAll("¡ìe" + player.getName() + "¡ìr is changed to team " + (isRed ? "¡ìcred" : "¡ì9blue") + ".");
 				
 				return true;
 			} else {
@@ -190,9 +183,32 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 			}
 			
 			World world = Bukkit.getWorld("world");
-
-			redStart = findHighestLocation(world, 496, 496, 16, 16);
-			blueStart = findHighestLocation(world, -512, -512, 16, 16);
+			
+			Random rand = new Random();
+			int randx, randz, i;
+			randx = rand.nextInt(1009) - 512;
+			randz = rand.nextInt(1009) - 512;
+			i = 0;
+			while(i < 10 && (world.getBiome(randx, randz) == Biome.OCEAN ||
+					world.getBiome(randx, randz) == Biome.DEEP_OCEAN)) {
+				randx = rand.nextInt(1009) - 512;
+				randz = rand.nextInt(1009) - 512;
+				i++;
+			}
+			redStart = findHighestLocation(world, randx, randz, 16, 16);
+			world.loadChunk(redStart.getBlockX()/16, redStart.getBlockZ()/16);
+			
+			randx = rand.nextInt(1009) - 512;
+			randz = rand.nextInt(1009) - 512;
+			i = 0;
+			while(i < 10 && (world.getBiome(randx, randz) == Biome.OCEAN ||
+					world.getBiome(randx, randz) == Biome.DEEP_OCEAN)) {
+				randx = rand.nextInt(1009) - 512;
+				randz = rand.nextInt(1009) - 512;
+				i++;
+			}
+			blueStart = findHighestLocation(world, randx, randz, 16, 16);
+			world.loadChunk(blueStart.getBlockX()/16, blueStart.getBlockZ()/16);
 
 			for(Entry<UUID, State> entry : playerStates.entrySet()) {
 				Player player = getServer().getPlayer(entry.getKey());
@@ -205,18 +221,20 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 					player.teleport(blueStart);
 					player.setBedSpawnLocation(blueStart, true);
 				}
+				player.setExp(0);
+				player.getInventory().clear();
+				state.reset();
 			}
 			
 			world.setTime(0);
-			
 			gameStart = true;
-			
-			sender.sendMessage("Game start. Have fun!");
+			sendToAll("Game start. Have fun!");
+
 			return true;
 			
 		} else if(cmd.getName().equalsIgnoreCase("pvpstop")) {
 			if(!gameStart) {
-				sender.sendMessage("Game has not started.");
+				sendToAll("Game has not started.");
 				return true;
 			}
 
@@ -269,24 +287,34 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 
 	@EventHandler
 	public void onDeath(PlayerDeathEvent event) {
+		if(!gameStart) {
+			return;
+		}
+			
 		Player dead = event.getEntity();
-		State s = playerStates.get(dead.getUniqueId());
-		s.death(dead.getKiller() != null);
+		State deadstate = playerStates.get(dead.getUniqueId());
 
 		Player killer = dead.getKiller();
 		if(killer != null) {
-			s = playerStates.get(killer.getUniqueId());
-			s.kill();
+			State killerstate = playerStates.get(killer.getUniqueId());
+			killerstate.kill();
+			if(deadstate.getContinuousKillString() != null) {
+				sendToAll(killer.getPlayerListName() + " finished " + dead.getPlayerListName() + "'s " + deadstate.getContinuousKillString() + "!");
+			}
+			if(killerstate.getContinuousKillString() != null) {
+				sendToAll(killer.getPlayerListName() + " is " + killerstate.getContinuousKillString() + "!");
+			}
+			deadstate.death(true);
+		} else {
+			deadstate.death(false);
 		}
-		
-		if(gameStart) {
-			State state = playerStates.get(dead.getUniqueId());
-			if(state.team == 1) {
-				dead.setBedSpawnLocation(redStart, true);
-			}
-			if(state.team == 2) {
-				dead.setBedSpawnLocation(blueStart, true);
-			}
+
+		State state = playerStates.get(dead.getUniqueId());
+		if(state.team == 1) {
+			dead.setBedSpawnLocation(redStart, true);
+		}
+		if(state.team == 2) {
+			dead.setBedSpawnLocation(blueStart, true);
 		}
 	}
 
@@ -298,6 +326,17 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 		} else {
 			State state = playerStates.get(event.getPlayer().getUniqueId());
 			state.online = false;
+		}
+	}
+
+	private void sendToAll(String string) {
+		for(Entry<UUID, State> entry : playerStates.entrySet()) {
+			UUID playerId = entry.getKey();
+			Player player = getServer().getPlayer(playerId);
+			
+			if(player != null) {
+				player.sendMessage(string);
+			}
 		}
 	}
 

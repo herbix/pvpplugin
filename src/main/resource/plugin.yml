@@ -1,17 +1,13 @@
 name: herbixpvp
 main: com.github.herbix.pvpplugin.PvpPlugin
-version: 0.1.0.3
+version: 0.2.0.0
 commands:
   red:
     description: Change my team to red.
     usage: /<command>
-    permission: true
-    permission-message: You don't have <permission>
   blue:
     description: Change my team to blue.
     usage: /<command>
-    permission: true
-    permission-message: You don't have <permission>
   pvpstart:
     description: Start pvp game.
     usage: /<command>
