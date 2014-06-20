@@ -98,7 +98,7 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 		getServer().addRecipe(recipe);
 		pvpAddRecipes.add(recipe);
 		
-		recipe = new ShapelessRecipe(new ItemStack(Material.NETHER_WARTS))
+		recipe = new ShapelessRecipe(new ItemStack(Material.NETHER_STALK))
 				.addIngredient(1, Material.SEEDS)
 				.addIngredient(1, Material.REDSTONE);
 		getServer().addRecipe(recipe);
