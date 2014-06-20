@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
 import org.bukkit.command.Command;
@@ -29,6 +30,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Recipe;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.ShapelessRecipe;
+import org.bukkit.map.MapRenderer;
+import org.bukkit.map.MapView;
+import org.bukkit.map.MapView.Scale;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
@@ -44,14 +48,32 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 	private Location redStart;
 	private Location blueStart;
 	private List<Recipe> pvpAddRecipes = new ArrayList<Recipe>();
+	private MapView map;
+	private PvpMapRenderer pvpMapRenderer;
+	private MapRenderer oldMapRenderer;
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public void onEnable() {
-		getServer().getPluginManager().registerEvents(this, this);
+		Server server = getServer();
+		server.getPluginManager().registerEvents(this, this);
 		initScoreboard();
 		initRecipes();
-		getServer().getScheduler().scheduleSyncRepeatingTask(this, this, 0, 20);
-		getServer().getWorld("world").setGameRuleValue("keepInventory", "true");
+		server.getScheduler().scheduleSyncRepeatingTask(this, this, 0, 20);
+		server.getWorld("world").setGameRuleValue("keepInventory", "true");
+		map = server.getMap((short)0);
+		if(map == null) {
+			map = server.createMap(server.getWorld("world"));
+		}
+		map.setCenterX(0);
+		map.setCenterZ(0);
+		map.setScale(Scale.FAR);
+		if(map.getRenderers().size() > 0) {
+			oldMapRenderer = map.getRenderers().get(0);
+			map.removeRenderer(oldMapRenderer);
+		}
+		map.addRenderer(pvpMapRenderer = new PvpMapRenderer(this));
+		i("MapRenderCount = " + map.getRenderers().size());
 	}
 
 	private void initRecipes() {
@@ -79,6 +101,13 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 		recipe = new ShapelessRecipe(new ItemStack(Material.NETHER_WARTS))
 				.addIngredient(1, Material.SEEDS)
 				.addIngredient(1, Material.REDSTONE);
+		getServer().addRecipe(recipe);
+		pvpAddRecipes.add(recipe);
+		
+		recipe = new ShapedRecipe(new ItemStack(Material.MAP, 1, (short)0))
+				.shape(" # ", "#$#", " # ")
+				.setIngredient('#', Material.COMPASS)
+				.setIngredient('$', Material.EMPTY_MAP);
 		getServer().addRecipe(recipe);
 		pvpAddRecipes.add(recipe);
 	}
@@ -120,6 +149,7 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 		states.setDisplaySlot(DisplaySlot.SIDEBAR);
 	}
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public void onDisable() {
 		HandlerList.unregisterAll((JavaPlugin) this);
@@ -141,6 +171,12 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 				it.remove();
 			}
 		}
+
+		map = getServer().getMap((short)0);
+		if(map != null) {
+			map.removeRenderer(pvpMapRenderer);
+			map.addRenderer(oldMapRenderer);
+		}
 		
 		getServer().getScheduler().cancelTasks(this);
 	}
@@ -158,7 +194,6 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 				Player player = (Player) sender;
 				
 				sb.getTeam("pvp-" + cmd.getName().toLowerCase()).addPlayer(player);
-				
 				playerStates.get(player.getUniqueId()).team = isRed ? 1 : 2;
 
 				sendToAll("¡ìe" + player.getName() + "¡ìr is changed to team " + (isRed ? "¡ìcred" : "¡ì9blue") + ".");
@@ -408,6 +443,10 @@ public class PvpPlugin extends JavaPlugin implements Listener, Runnable {
 		if(!loc.equals(player.getLocation())) {
 			player.teleport(loc);
 		}
+	}
+
+	public Map<UUID, State> getPlayerStates() {
+		return playerStates;
 	}
 
 	public void i(String msg) {
